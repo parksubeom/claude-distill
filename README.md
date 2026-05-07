@@ -1,132 +1,93 @@
 # claude-distill
 
-> Hook-based feedback loop for Claude Code: every session → extract knowledge + gotchas → user reviews → accumulate.
+> 클로드 코드 세션에서 판례·사고 보고서를 자동 누적시키는 hook 도구. 한 번 설치하면 더 이상 손 안 댑니다.
 
-## Why
+## 왜
 
-Claude Code is great at *writing* code. It's bad at *learning from* the work it just did.
+세션마다 의미있는 trade-off 결정 (`A 대신 B 선택, 이유는…`), 환경 함정 (`Cursor webview에서 confirm() 차단됨`), 같은 실수 (`Claude Code JSONL의 promptId는 항상 null`)이 쌓입니다. 그런데 세션이 끝나면 다 잊혀집니다.
 
-Every session you make trade-off decisions ("we picked option A because…"), discover environment quirks ("Cursor webview blocks `confirm()`"), and step on the same rakes ("Claude Code JSONL has `promptId: null` on every assistant line"). All of that walks out the door at session end.
+`claude-distill`은 그걸 자동으로 잡아서 markdown에 누적시킵니다. 그리고 다음 세션에 Claude가 자연스럽게 참조합니다.
 
-`claude-distill` is the missing layer. Three files:
+```
+CLAUDE.md       법률  — 모든 세션이 따라야 하는 보편 규칙 (직접 작성)
+knowledge.md    판례  — "이 상황엔 이렇게 했다"  (자동 누적)
+gotchas.md      사고  — "같은 실수 반복 금지"  (자동 누적)
+```
 
-- **`CLAUDE.md`** — your *law*. Rules every session must follow. (Already exists.)
-- **`knowledge.md`** — your *case law*. "Last time in this situation we did X because Y." (NEW)
-- **`gotchas.md`** — your *incident reports*. "Don't make the same mistake again." (NEW)
-
-The distill hook reads each session's transcript, asks Claude to extract candidate entries, and queues them for your review. You approve / edit / reject; approved entries accumulate.
-
-## Install
+## 설치
 
 ```bash
+npm install -g @anthropic-ai/claude-code   # 사전 요구 (없으면)
 npm install -g claude-distill
-claude-distill init     # registers the SessionEnd hook in ~/.claude/settings.json
+claude-distill init
 ```
 
-## Use
+`init`이 두 가지를 등록합니다 (idempotent — 중복 등록 X):
+1. `~/.claude/settings.json`의 **Stop hook** — 세션 끝날 때마다 자동 분석
+2. `~/.claude/CLAUDE.md` 끝에 **`@knowledge.md` / `@gotchas.md`** 참조 — 다음 세션부터 Claude가 자동 참조
 
-Nothing — that's the point. Work as usual. At session end the hook fires and stages candidates.
+끝입니다. 더 이상 손 안 댑니다.
 
-When you start the next session, or whenever you want, run:
+## 어떻게 동작
+
+1. 세션 끝 → Stop hook이 `claude-distill analyze --quiet` 자동 실행
+2. 마지막 user marker 이후 turn을 slice → `claude --print`로 분석기에 전달
+3. 결과 JSON에서 **`confidence: high`** entry만 markdown에 자동 append
+4. medium / low entry는 의도적으로 drop (사용자 손 안 가게)
+5. 다음 세션부터 Claude가 `@reference`로 자동 참조
+
+분석기 prompt는 보수적으로 작성됨 — 자명한 사실, project-internal trivia, 검증 안 된 추측은 제외.
+
+## 카테고리
+
+**판례** (knowledge): `trade_off_decision` · `environment_quirk` · `scale_transition` · `tooling_insight` · `performance_insight`
+
+**사고** (gotcha): `api_quirk` · `type_shape` · `concurrency_race` · `build_deploy` · `privacy_security` · `ux_regression`
+
+## 결과 보기
+
+별도 UI 없습니다. **markdown 파일을 IDE에서 직접 열어보시면 됩니다**:
 
 ```bash
-claude-distill review
+~/.claude/knowledge.md
+~/.claude/gotchas.md
 ```
 
-You see each candidate one at a time:
+마음에 안 드는 entry는 그냥 그 줄 삭제하면 됩니다 (markdown이라 자유 편집).
 
-```
-🧠 Distill — 3 candidates from session 8f14d0f4
+## 명령
 
-[1/3] ⚠️ GOTCHA · api_quirk · confidence: high
-┌──────────────────────────────────────────────────────────┐
-│ Title:  Claude Code JSONL: assistant.promptId is null    │
-│ Symptom: tokenUsage 0/1042 matches                       │
-│ Trap:    docs say promptId, reality is uuid+parentUuid   │
-│ Tags:    claude-code · jsonl · token-tracking            │
-│ Scope:   ◉ Project   ○ Global                            │
-└──────────────────────────────────────────────────────────┘
-[a]ccept  [e]dit  [r]eject  [s]kip-for-later
-```
+| 명령 | 용도 |
+|---|---|
+| `claude-distill init` | hook + CLAUDE.md reference 등록 (한 번만) |
+| `claude-distill where` | 모든 path / 존재 여부 확인 (디버깅) |
+| `claude-distill analyze` | 수동 분석 (보통 hook이 자동 호출) |
 
-Approved entries land in:
+`analyze`의 옵션:
+- `--no-auto` — 자동 누적 대신 stdout에 JSON 출력 (디버깅)
+- `--mock` — claude CLI 호출 없이 fake entry 1건 생성
+- `--quiet` — 출력 억제 (hook용)
+- `--session=<file>` — 특정 jsonl 직접 지정
 
-- `~/.claude/knowledge.md` (global) or `<project>/.claude/knowledge.md` (project-scoped)
-- `~/.claude/gotchas.md` (global) or `<project>/.claude/gotchas.md` (project-scoped)
+## 프로젝트별 누적
 
-Both are plain Markdown, written for humans first. Open them in your editor any time. They're committable too — share `<project>/.claude/gotchas.md` with your team.
-
-## Reference loop — how Claude actually uses this
-
-After your first approved entries land, add this to your `CLAUDE.md`:
-
+전역 누적이 기본. 프로젝트별로 따로 모으고 싶으면 `<project>/.claude/CLAUDE.md`에 직접:
 ```markdown
-@~/.claude/knowledge.md
-@~/.claude/gotchas.md
-
-# Or for project-scoped:
 @.claude/knowledge.md
 @.claude/gotchas.md
 ```
+추가하고, hook 호출 시 `--scope=project` 옵션 사용 (v0.3+).
 
-The `@` reference syntax injects the file contents into Claude's system prompt. Now your past lessons are available to every future session. The loop is closed.
+## 프라이버시
 
-## Categories
+- 모든 추출이 사용자 머신에서 일어남
+- transcript 내용은 사용자가 (또는 hook이) 호출할 때만 Claude로 전달
+- 결과는 plain markdown — git ignore 규칙 그대로 따름
+- hook은 `~/.claude/settings.json`에서 직접 비활성화 가능
 
-### Knowledge — judgment calls
+## 상태
 
-| Category | Captures |
-|---|---|
-| `trade_off_decision` | "We picked A over B because…" |
-| `environment_quirk` | Tool / runtime / IDE quirks worth remembering |
-| `scale_transition` | Threshold information ("at N lines, refactor") |
-| `tooling_insight` | Tool flags, commands, gotchas you figured out |
-| `performance_insight` | Measured numbers + cause |
-
-### Gotchas — mistakes to avoid
-
-| Category | Captures |
-|---|---|
-| `api_quirk` | Undocumented library / API behavior |
-| `type_shape` | Data shape pitfalls |
-| `concurrency_race` | Async / ordering bugs |
-| `build_deploy` | Build / deploy traps |
-| `privacy_security` | Security mistakes |
-| `ux_regression` | UX regression patterns |
-
-## CLI
-
-```
-claude-distill init                    Register SessionEnd hook (idempotent)
-claude-distill analyze [--session=X]   Run analysis manually (debug)
-claude-distill review                  Walk through pending candidates
-claude-distill list [--type=...]       Print accumulated entries
-claude-distill search <query>          Keyword search across all entries
-claude-distill archive [--older=90d]   Move stale entries to archive
-claude-distill where                   Print resolved file paths
-```
-
-## How extraction works
-
-1. Hook fires on `SessionEnd`
-2. Last N turns of the session JSONL are extracted (default: turns after the latest `<command-name>` marker)
-3. Sent to Claude (via `claude` CLI by default; alternative: direct Anthropic API with your own key) with the analyzer prompt
-4. Response is JSON: 0–5 candidate entries
-5. Saved to `~/.claude/.distill/pending.json`
-6. Next time you run `claude-distill review`, you walk through them
-
-The analyzer prompt explicitly excludes self-evident facts, project-internal trivia with no transferable lesson, and anything already in your existing `knowledge.md` / `gotchas.md` (de-duplication).
-
-## Privacy
-
-- All extraction happens on your machine. Transcript content goes to Claude only when you (or the hook) call it.
-- Pending candidates live at `~/.claude/.distill/pending.json` until reviewed.
-- You explicitly choose `global` vs `project` scope per entry. Project scope means the file lives in the repo and follows your normal git ignore rules.
-- The hook reads only the latest session JSONL — you can disable it in `~/.claude/settings.json` any time.
-
-## Status
-
-Pre-1.0 — actively iterating. Use at your own pace. PRs and issues welcome.
+v0.2. 초기 릴리스. 실 사용 결과 알려주시면 prompt 튜닝/카테고리 조정 진행합니다.
 
 ## License
 

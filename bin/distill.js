@@ -1,35 +1,40 @@
 #!/usr/bin/env node
-// claude-distill CLI entry point.
+// claude-distill — zero-effort knowledge accumulator for Claude Code.
 //
-// Subcommands dispatch to lib/* — each file is small and single-purpose so
-// you can read the whole flow top-to-bottom without IDE help.
-
-const path = require('path');
-const fs = require('fs');
+// 명령은 단 3개:
+//   init    — Stop hook + CLAUDE.md @reference 한 번 등록
+//   analyze — 자동 분석 (Hook이 호출, 직접 호출 불필요)
+//   where   — 모든 경로 sanity check
+//
+// 그 외(review/list/search/archive)는 의도적으로 없습니다. markdown 파일을
+// 그냥 IDE에서 열어 보시면 됩니다.
 
 const cmd = process.argv[2];
 const args = process.argv.slice(3);
 
-const help = `claude-distill — Knowledge + Gotchas feedback loop for Claude Code
+const help = `claude-distill — Knowledge + Gotchas auto-accumulator for Claude Code
 
-Usage:
-  claude-distill init                    Register SessionEnd hook in ~/.claude/settings.json
-  claude-distill analyze [--session=X]   Run extraction on the latest (or named) session
-  claude-distill review                  Walk through pending candidates
-  claude-distill list [--type=...]       Print accumulated entries
-  claude-distill search <query>          Keyword search across all entries
-  claude-distill archive [--older=90d]   Move stale entries to archive
-  claude-distill where                   Print resolved file paths
+설치:
+  claude-distill init       Stop hook + CLAUDE.md reference 등록 (한 번만)
 
-Run a subcommand without args for its own help.`;
+확인:
+  claude-distill where      모든 파일 경로 / 존재 여부
+
+수동 분석 (보통 Hook이 자동으로 함):
+  claude-distill analyze [--no-auto] [--mock] [--quiet]
+
+결과는 plain markdown:
+  ~/.claude/knowledge.md    판례 (전역)
+  ~/.claude/gotchas.md      사고 보고서 (전역)
+또는 프로젝트별:
+  <project>/.claude/knowledge.md
+  <project>/.claude/gotchas.md
+
+editor에서 직접 열어보시면 됩니다 — review UI 없습니다.`;
 
 const dispatch = {
   init:    () => require('../lib/init').run(args),
   analyze: () => require('../lib/analyze').run(args),
-  review:  () => require('../lib/review').run(args),
-  list:    () => require('../lib/list').run(args),
-  search:  () => require('../lib/search').run(args),
-  archive: () => require('../lib/archive').run(args),
   where:   () => require('../lib/where').run(args),
   '--help': () => console.log(help),
   '-h':     () => console.log(help),
