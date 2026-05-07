@@ -14,32 +14,22 @@
 
 ---
 
-## 진짜 결과 발췌
+## 어떤 게 자동으로 누적되나
 
-이 도구를 만들면서 dogfood한 첫 세션에서 자동으로 추출된 entry입니다 (편집 없음):
+세션 한 번 했더니 이런 entry들이 알아서 추출돼서 `~/.claude/gotchas.md` / `knowledge.md`에 추가됐습니다 (모두 진짜 dogfood 결과, 편집 없음):
 
-```markdown
-## ⚠️ Cursor's bundled Claude does not put `claude` on PATH
-**Category**: environment_quirk · **Confidence**: high
-
-**Context**: claude-distill는 transcript 분석에 `claude` CLI를
-shell out으로 호출. Cursor + Claude integration이 깔린 머신에서
-`which claude`가 비어있어 analyze가 `claude not found`로 실패.
-
-**Insight**: Cursor / IDE-bundled Claude 통합은 사용자 shell PATH에
-`claude` 바이너리를 노출하지 않음. CLI에 의존하는 도구는
-사용자에게 `@anthropic-ai/claude-code` 별도 설치를 안내해야 하고,
-부재 시 친절한 메시지를 surface해야 함.
-
-**Basis**: `claude not found` from `where`,
-later `sudo npm install -g @anthropic-ai/claude-code`
-produced `/usr/local/bin/claude` and `2.1.132 (Claude Code)`.
-
-**Application**: `claude` shell out 도구는 PATH up-front check + 설치
-가이드 surface. IDE 사용자가 CLI도 깔려있다고 가정하지 말 것.
+```
+⚠️  npm link가 macOS 기본 prefix에서 sudo 없이 실패 — 절대경로로 우회
+⚠️  Claude Code JSONL의 promptId가 항상 null — uuid + parentUuid 체인 사용
+⚠️  Cursor 빌트인 Claude는 PATH에 `claude` 바이너리를 노출 안 함
+🧠  ffmpeg cropdetect의 limit은 어두운 padding에서 ≥32 필요
+🧠  Transcript를 마지막 user marker부터 slice하면 분석 prompt ~80% 감소
+🧠  CSP `connect-src 'none'`이 webview의 외부 fetch를 이중 차단
 ```
 
-`Symptom → Trap → Cause → Workaround` 4단 구조로 자동 정리됩니다. 분석기가 다른 사용자에게도 transferable한 lesson만 추출하도록 prompt가 보수적으로 작성됨 (자명한 사실 / 프로젝트 internal trivia / 검증 안 된 추측은 제외).
+각 entry는 `Symptom → Trap → Cause → Workaround` 4단으로 자동 정리됩니다 — 다음 세션의 Claude가 그대로 읽고 참조 가능한 형태로. 분석기 prompt가 보수적이라 자명한 사실 / 프로젝트 internal trivia / 검증 안 된 추측은 제외됩니다.
+
+전체 markdown은 IDE에서 그냥 열어보면 됩니다.
 
 ---
 
@@ -58,13 +48,33 @@ produced `/usr/local/bin/claude` and `2.1.132 (Claude Code)`.
 ## 설치
 
 ```bash
-# 사전 요구
-npm install -g @anthropic-ai/claude-code
-
-# claude-distill
 npm install -g claude-distill
 claude-distill init
 ```
+
+분석을 위한 LLM 호출 경로 둘 중 하나가 필요합니다:
+
+### 옵션 A — Claude Code CLI 사용자 (사전 설치 필요)
+
+```bash
+npm install -g @anthropic-ai/claude-code
+# 끝. distill이 자동으로 `claude --print` 호출.
+```
+
+### 옵션 B — Claude Code IDE 익스텐션 사용자 (Cursor / VS Code)
+
+빌트인 Claude는 PATH에 노출되지 않으니 **API key**를 사용:
+
+```bash
+# https://console.anthropic.com/ 에서 API key 발급 후
+echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
+source ~/.zshrc
+# distill이 환경변수 감지 시 자동으로 API 호출.
+```
+
+(또는 옵션 A처럼 CLI 추가 설치도 가능 — IDE와 별개 동작.)
+
+---
 
 `init`이 idempotent하게 두 가지를 등록:
 
@@ -157,8 +167,11 @@ A. 노이즈 누적이 가장 큰 실패 패턴이라 보수적으로 시작. �
 **Q. 프로젝트별 누적은?**
 A. 전역이 기본. 프로젝트별 원하면 `<project>/.claude/CLAUDE.md`에 직접 `@.claude/knowledge.md` 추가. v0.3+에서 `--scope=project` 옵션 자동화 예정.
 
+**Q. Cursor / VS Code Claude Code 익스텐션 사용자도 됨?**
+A. **됩니다.** transcript는 익스텐션도 같은 위치(`~/.claude/projects/`)에 저장. 분석을 위한 LLM 호출만 별도 경로가 필요한데, `ANTHROPIC_API_KEY`만 환경변수로 export하면 distill이 자동으로 Anthropic API 직접 호출 (Node 18+ 빌트인 fetch).
+
 **Q. 다른 LLM 백엔드?**
-A. 현재 `claude` CLI만. v0.3에서 `--backend=api` (`ANTHROPIC_API_KEY` 직접) 추가 예정.
+A. 현재 `claude` CLI + Anthropic API 두 가지. `--backend=cli|api|auto` 옵션. 기본 `auto`는 `ANTHROPIC_API_KEY` 있으면 API 우선, 없으면 CLI fallback. OpenAI / 로컬 LLM 지원은 v0.3+.
 
 ---
 
