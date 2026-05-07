@@ -16,19 +16,38 @@
   "keywords": [
     "claude",
     "claude-code",
+    "claude-code-hook",
     "anthropic",
+    "ai-coding",
+    "ai-assistant",
     "knowledge-management",
     "session-transcript",
-    "ai-coding",
+    "post-mortem",
     "developer-tools",
+    "productivity",
     "hook",
-    "post-mortem"
+    "meta-tooling",
+    "learning-tool",
+    "markdown",
+    "cli"
   ],
   "author": "parksubeom",
   "license": "MIT",
+  "homepage": "https://github.com/parksubeom/claude-distill#readme",
+  "bugs": {
+    "url": "https://github.com/parksubeom/claude-distill/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/parksubeom/claude-distill.git"
   },
+  "files": [
+    "bin",
+    "lib",
+    "prompts",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {}
 }
