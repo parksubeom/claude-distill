@@ -1,0 +1,34 @@
+{
+  "name": "claude-distill",
+  "version": "0.1.0",
+  "description": "Distill knowledge and gotchas from Claude Code session transcripts. Hook-based feedback loop: session → extract → review → accumulate.",
+  "bin": {
+    "claude-distill": "bin/distill.js",
+    "distill": "bin/distill.js"
+  },
+  "main": "lib/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node test/smoke.js"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "knowledge-management",
+    "session-transcript",
+    "ai-coding",
+    "developer-tools",
+    "hook",
+    "post-mortem"
+  ],
+  "author": "parksubeom",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/parksubeom/claude-distill.git"
+  },
+  "dependencies": {}
+}
