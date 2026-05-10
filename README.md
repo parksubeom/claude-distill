@@ -12,6 +12,36 @@
 
 사용자가 하는 일: `claude-distill init` **한 번. 끝.**
 
+### 한눈에 보기 — 설치 전 vs 설치 후
+
+```
+설치 전:
+  세션 1  →  함정 발견 ❌  →  "Claude야, 이거 주의해"
+  세션 2  →  같은 함정 ❌  →  "Claude야, 이거 주의해"      (또?)
+  세션 3  →  같은 함정 ❌  →  "Claude야, 이거 주의해"      (세 번째…)
+                                  └─ 매 세션 리셋, 영원히 반복
+
+설치 후 (claude-distill init 한 번):
+  세션 1  →  함정 발견 ❌  →  Stop hook이 자동 누적 (gotchas.md)
+  세션 2  →  Claude가 이미 앎 ✓  (markdown @reference로 자동 inject)
+  세션 3  →  Claude가 이미 앎 ✓
+                                  └─ 한 번 배우면 모든 미래 세션이 공유
+```
+
+```mermaid
+flowchart LR
+    A[세션 N] -->|종료| B[Stop hook]
+    B --> C{4단 게이트<br/>~90% 컷}
+    C -->|차단| X[~$0 종료]
+    C -->|통과| D[LLM 분석]
+    D --> E[knowledge.md /<br/>gotchas.md<br/>auto-append]
+    E -.@reference로<br/>system prompt 주입.-> F[세션 N+1<br/>이미 앎]
+    F -.다음 턴 종료.-> A
+    style F fill:#d4edda
+    style E fill:#fff3cd
+    style X fill:#f8f9fa
+```
+
 부담 없는 이유:
 - **별도 서버 / 계정 없음** — 본인 머신 → Anthropic API 직통. distill 운영자한테도 transcript 안 감
 - **의존성 0개, 50KB 미만** — [GitHub](https://github.com/parksubeom/claude-distill)에서 코드 그대로 검수
@@ -49,6 +79,27 @@
 | **`gotchas.md`** | 사고 보고서 — "같은 실수 반복 금지" (자동 누적) |
 
 법률은 사람이 쓰지만, 판례와 사고 보고서는 매일 쌓이는 거니까 — 그건 자동화될 수 있습니다.
+
+```
+   ┌──────────────────────────────────────┐
+   │  ~/.claude/CLAUDE.md   (법률 — 직접) │
+   │                                      │
+   │    @~/.claude/knowledge.md  ─────────┼──┐
+   │    @~/.claude/gotchas.md    ─────────┼──┤
+   └──────────────────────────────────────┘  │
+                  ▲                          │
+                  │ Claude가 매 세션 시작 시 │ inject
+                  │ system prompt에 자동 로드│
+                  │                          │
+                  │   ┌──────────────────────┘
+                  │   ▼
+              ┌───┴───────────────────┐
+              │  knowledge.md  (판례) │ ← claude-distill이
+              │  gotchas.md    (사고) │   세션 끝마다 append
+              └───────────────────────┘
+```
+
+`init` 한 번이 위 그림의 **`@reference` 두 줄**을 자동 등록 → 그 후 매 세션 끝마다 distill이 markdown에 자동 누적 → 다음 세션이 자동 참조.
 
 ---
 
