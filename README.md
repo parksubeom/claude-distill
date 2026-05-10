@@ -12,6 +12,13 @@
 
 사용자가 하는 일: `claude-distill init` **한 번. 끝.**
 
+부담 없는 이유:
+- **별도 서버 / 계정 없음** — 본인 머신 → Anthropic API 직통. distill 운영자한테도 transcript 안 감
+- **의존성 0개, 50KB 미만** — [GitHub](https://github.com/parksubeom/claude-distill)에서 코드 그대로 검수
+- **세션당 비용 ~$0** — 4단 게이트로 본 추출 호출 ~10× 컷 (휴리스틱 → Haiku → dedup hash → 재귀 가드)
+- **Plain markdown 결과** — 마음에 안 드는 entry는 그 줄 삭제. UI / DB / 락인 없음
+- **한국어 / 영어 자동 누적** — transcript 언어 자동 감지, 별도 설정 불필요
+
 ---
 
 ## 어떤 게 자동으로 누적되나
@@ -152,7 +159,27 @@ source ~/.zshrc
 - `ANTHROPIC_API_KEY` — 설정 시 Haiku 게이트 자동 활성 (~$0 가까이 게이트 비용)
 - `CLAUDE_DISTILL_GATE_MODEL` — 게이트 모델 (기본 `claude-haiku-4-5-20251001`)
 - `CLAUDE_DISTILL_MODEL` — 본 추출 모델 (기본 `claude-sonnet-4-6`)
+- `CLAUDE_DISTILL_LANG` — 누적 언어 강제 (`ko` / `en`). 미설정 시 transcript 한글 비율로 자동 감지
 - `CLAUDE_DISTILL_CHILD` — distill이 spawn한 자식 claude 표식. 수동 설정 불필요 (hook 무한 재귀 차단용 내부 플래그)
+
+---
+
+## 언어 (i18n) — 한국어 / 영어
+
+`knowledge.md` / `gotchas.md`는 한국어 또는 영어로 누적할 수 있습니다. 헤더 / 필드 라벨 (`상황` / `함정` / `근거` … vs `Context` / `Trap` / `Basis` …) 과 entry 본문이 모두 해당 언어로 작성됩니다. 카테고리 키 (`api_quirk`, `trade_off_decision` 등) 는 머신 식별자라 영어 enum 그대로 유지.
+
+**우선순위**:
+1. `claude-distill analyze --lang=ko|en` (명시)
+2. `CLAUDE_DISTILL_LANG=ko|en` 환경변수
+3. **transcript 자동 감지** — 세션 turn에서 한글 음절 비율이 5% 넘으면 `ko`, 아니면 `en`
+4. `process.env.LANG` (예: `ko_KR.UTF-8` → `ko`)
+5. fallback: `en`
+
+대부분의 사용자는 **3번 자동 감지로 충분** — 한국어로 코딩하는 세션은 한국어로, 영어 세션은 영어로 자연스럽게 누적됩니다. 별도 설정 없이.
+
+영어 위주로 쓰다 한국어 entry가 섞이는 게 싫다면 `~/.zshrc`에 `export CLAUDE_DISTILL_LANG=en` 으로 고정.
+
+> **혼재 주의**: 기존 markdown이 영어로 쌓여있을 때 locale을 `ko`로 바꾸면, 같은 파일에 영/한 entry가 섞입니다. plain markdown이라 사용자가 직접 정리 가능 (헤더 / 라벨 일괄 치환). v0.4 첫 cut은 단일 파일 정책 — 언어별 파일 분리 (`knowledge.ko.md`)는 추후 검토.
 
 ---
 
@@ -210,6 +237,7 @@ A. macOS / Linux / Windows (Node 18+ 설치돼있으면). 경로는 전부 `os.h
 
 ## 상태
 
+v0.4 — i18n. `knowledge.md` / `gotchas.md`를 한국어 / 영어로 자동 누적 (transcript 언어 감지 또는 `CLAUDE_DISTILL_LANG`).
 v0.3 — 게이트 도입 (휴리스틱 + Haiku) + Stop 훅 무한 재귀 가드. 본 추출 호출 ~10× 감소.
 v0.2 — 자동 누적 모델로 재정비.
 

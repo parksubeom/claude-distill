@@ -21,7 +21,12 @@ const help = `claude-distill — Knowledge + Gotchas auto-accumulator for Claude
   claude-distill where      모든 파일 경로 / 존재 여부
 
 수동 분석 (보통 Hook이 자동으로 함):
-  claude-distill analyze [--no-auto] [--mock] [--quiet]
+  claude-distill analyze [--no-auto] [--mock] [--quiet] [--lang=ko|en]
+
+언어 (knowledge.md / gotchas.md 누적 언어):
+  --lang=ko|en              명시 (가장 우선)
+  CLAUDE_DISTILL_LANG=...   환경변수
+  (없으면) transcript 한글 비율로 자동 감지 → process.env.LANG → 'en'
 
 결과는 plain markdown:
   ~/.claude/knowledge.md    판례 (전역)

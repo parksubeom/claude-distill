@@ -27,6 +27,22 @@ analyze.run(['--mock']);
 console.log('\n--- 결과 gotchas.md ---');
 console.log(fs.readFileSync(cfg.GLOBAL_GOTCHAS, 'utf8'));
 
+console.log('\n--- analyze --mock --lang=ko (한국어 누적) ---');
+analyze.run(['--mock', '--lang=ko']);
+
+console.log('\n--- 결과 gotchas.md (영/한 혼재 확인) ---');
+console.log(fs.readFileSync(cfg.GLOBAL_GOTCHAS, 'utf8'));
+
+console.log('\n--- locale 모듈 단위 검증 ---');
+const localeMod = require('../lib/locale');
+const koTranscript = { turns: [{ role: 'user', content: '한국어로 디버깅 세션 진행 중. 에러 발생. 함수 호출 실패. 원인 파악. '.repeat(20) }] };
+const enTranscript = { turns: [{ role: 'user', content: 'Debugging session in English with stack trace and error output. '.repeat(20) }] };
+console.log('  detect ko transcript →', localeMod.detectFromTranscript(koTranscript));
+console.log('  detect en transcript →', localeMod.detectFromTranscript(enTranscript));
+console.log('  resolve {flag:ko}    →', localeMod.resolveLocale({ flag: 'ko' }));
+console.log('  resolve {flag:EN}    →', localeMod.resolveLocale({ flag: 'EN' }));
+console.log('  resolve {flag:fr}    → (fallback)', localeMod.resolveLocale({ flag: 'fr' }));
+
 console.log('\n--- where ---');
 where.run([]);
 
