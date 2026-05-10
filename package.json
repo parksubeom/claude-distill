@@ -1,6 +1,6 @@
 {
   "name": "claude-distill",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Distill knowledge and gotchas from Claude Code session transcripts. Hook-based feedback loop: session → extract → review → accumulate.",
   "bin": {
     "claude-distill": "bin/distill.js",
