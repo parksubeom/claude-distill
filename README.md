@@ -1,306 +1,176 @@
 # claude-distill
 
-> **한 줄 요약** — Claude를 매일 새로 출근하는 알바생이라고 생각해보세요. 어제 가르친 요령을 오늘도 똑같이 다시 설명해야 합니다. `claude-distill`은 어제 배운 걸 **자동으로 인수인계 노트에 적어두는 도구**예요. 다음 날의 Claude가 출근하자마자 그 노트를 읽고 시작하니까, 같은 설명을 두 번 할 필요가 없습니다.
+**Claude가 대화에서 배운 것을 자동으로 인수인계 노트에 적어 두는 도구예요. 다음 대화의 Claude는 그 노트를 읽고 시작해요.**
 
-> Claude한테 같은 함정을 세 번째 설명하고 계신가요?
+Claude를 매일 새로 출근하는 사람이라고 생각해 보세요. 어제 가르친 요령을 오늘 또 설명해야 해요. claude-distill은 대화가 끝날 때마다 쓸 만한 교훈이 있었는지 보고, 있으면 노트에 적어요. 사용자가 할 일은 처음에 한 번 설치하는 것뿐이에요.
 
-세션마다 트레이드오프 결정 (`A 대신 B 선택, 이유는…`), 환경 함정 (`Cursor webview는 confirm() 차단됨`), 같은 실수 (`Claude Code JSONL의 promptId는 항상 null`)가 쌓입니다. 그런데 세션이 끝나면 다 잊혀집니다. CLAUDE.md를 매번 갱신하면 좋겠지만 — 솔직히 안 하죠.
+> **지금 상태 — npm v0.4.1.** 자동 기록, 비용을 줄이는 4단 필터, 한국어·영어 자동 기록까지 동작해요.
 
-`claude-distill`은 **Stop hook**입니다. 한 번 설치하면:
-
-1. 세션 끝날 때마다 transcript를 자동으로 분석
-2. confidence:high 판례 + 사고 보고서를 markdown에 자동 누적
-3. 다음 세션부터 Claude가 자동으로 참조 (CLAUDE.md `@reference` 통해)
-
-사용자가 하는 일: `claude-distill init` **한 번. 끝.**
-
-### 한눈에 보기 — 설치 전 vs 설치 후
+## 어떤 문제를 푸나요
 
 ```
-설치 전:
-  1번째 대화  →  주의할 점 발견   →  "Claude야, 이거 주의해"
-  2번째 대화  →  같은 주의할 점   →  "Claude야, 이거 주의해"      (또?)
-  3번째 대화  →  같은 주의할 점   →  "Claude야, 이거 주의해"      (세 번째…)
-  
-                                       └─ 대화마다 기억이 리셋, 영원히 반복
+설치 전
+  첫 번째 대화   주의할 점 발견   →  "Claude야, 이거 조심해"
+  두 번째 대화   같은 주의할 점   →  "Claude야, 이거 조심해"   (또?)
+  세 번째 대화   같은 주의할 점   →  "Claude야, 이거 조심해"   (세 번째…)
 
-설치 후 (claude-distill init 한 번):
-  1번째 대화  →  주의할 점 발견  →  자동으로 인수인계 노트에 기록
-  2번째 대화  →  Claude가 이미 알고 시작 ✓  (출근하자마자 노트 읽음)
-  3번째 대화  →  Claude가 이미 알고 시작 ✓
-                                       └─ 한 번 배우면 모든 미래 대화가 공유
+설치 후 (claude-distill init 한 번)
+  첫 번째 대화   주의할 점 발견   →  노트에 자동 기록
+  두 번째 대화   Claude가 이미 알고 시작
+  세 번째 대화   Claude가 이미 알고 시작
 ```
+
+## 어떻게 동작하나요
 
 ```mermaid
 flowchart LR
-    A[당신이 Claude와 대화] -->|대화 끝| B[자동으로 분석 시작]
-    B --> C{쓸 만한 배움이<br/>있었나?}
-    C -->|없음| X[조용히 종료<br/>비용 0원]
-    C -->|있음| D[AI가 핵심만 추출]
-    D --> E[인수인계 노트에 추가<br/>판례 / 사고 기록]
-    E -.다음 대화 시작 시<br/>Claude가 자동으로 읽음.-> F[다음 대화는<br/>'이미 아는 상태'로 시작]
-    F -.대화 끝나면 또.-> A
-    style F fill:#d4edda
-    style E fill:#fff3cd
-    style X fill:#f8f9fa
+  talk["Claude와 대화"] -- "대화가 끝나면" --> check{"쓸 만한 교훈이<br/>있었나?"}
+  check -- "없음 (대부분)" --> stop["조용히 끝<br/>비용 거의 0"]
+  check -- "있음" --> extract["핵심만 뽑기"]
+  extract --> note["노트에 추가<br/>판례 · 사고 기록"]
+  note -. "다음 대화가 시작될 때<br/>자동으로 읽음" .-> next["다음 대화는<br/>이미 아는 상태로 시작"]
 ```
 
-> **용어**:
-> - "인수인계 노트" = `~/.claude/knowledge.md` (판례) / `~/.claude/gotchas.md` (사고). 그냥 markdown 파일이라 직접 열어보고 편집 가능합니다.
-> - "AI가 핵심만 추출" = Claude(Sonnet 또는 Haiku)가 대화 내용을 요약. 거의 모든 대화는 "쓸 만한 배움 없음"으로 분류돼 비용 0원으로 종료.
+노트는 두 개의 평범한 마크다운 파일이에요. 마음에 안 드는 내용은 그 줄을 지우면 돼요.
 
-부담 없는 이유:
-- **별도 서버 / 계정 없음** — 본인 머신 → Anthropic API 직통. distill 운영자한테도 transcript 안 감
-- **의존성 0개, 50KB 미만** — [GitHub](https://github.com/parksubeom/claude-distill)에서 코드 그대로 검수
-- **세션당 비용 ~$0** — 4단 게이트로 본 추출 호출 ~10× 컷 (휴리스틱 → Haiku → dedup hash → 재귀 가드)
-- **Plain markdown 결과** — 마음에 안 드는 entry는 그 줄 삭제. UI / DB / 락인 없음
-- **한국어 / 영어 자동 누적** — transcript 언어 자동 감지, 별도 설정 불필요
+| 파일 | 비유 | 누가 쓰나 |
+| --- | --- | --- |
+| `CLAUDE.md` | 법률 — 변하지 않는 규칙 | 사람 |
+| `knowledge.md` | 판례 — "이런 상황에선 이렇게 했다" | claude-distill이 자동으로 |
+| `gotchas.md` | 사고 기록 — "같은 실수 반복 금지" | claude-distill이 자동으로 |
 
----
+## 실제로 쌓인 기록
 
-## 어떤 게 자동으로 누적되나
-
-세션 한 번 했더니 이런 entry들이 알아서 추출돼서 `~/.claude/gotchas.md` / `knowledge.md`에 추가됐습니다 (모두 진짜 dogfood 결과, 편집 없음):
+직접 쓰면서 자동으로 쌓인 항목들이에요(내용은 편집하지 않았어요).
 
 ```
-⚠️  npm link가 macOS 기본 prefix에서 sudo 없이 실패 — 절대경로로 우회
-⚠️  Claude Code JSONL의 promptId가 항상 null — uuid + parentUuid 체인 사용
-⚠️  Cursor 빌트인 Claude는 PATH에 `claude` 바이너리를 노출 안 함
-🧠  ffmpeg cropdetect의 limit은 어두운 padding에서 ≥32 필요
-🧠  Transcript를 마지막 user marker부터 slice하면 분석 prompt ~80% 감소
-🧠  CSP `connect-src 'none'`이 webview의 외부 fetch를 이중 차단
+gotcha     npm link가 macOS 기본 prefix에서 sudo 없이 실패 — 절대경로로 우회
+gotcha     Claude Code JSONL의 promptId가 항상 null — uuid + parentUuid 체인 사용
+gotcha     Cursor 빌트인 Claude는 PATH에 `claude` 바이너리를 노출 안 함
+knowledge  ffmpeg cropdetect의 limit은 어두운 padding에서 ≥32 필요
+knowledge  Transcript를 마지막 user marker부터 slice하면 분석 prompt ~80% 감소
+knowledge  CSP `connect-src 'none'`이 webview의 외부 fetch를 이중 차단
 ```
 
-각 entry는 `Symptom → Trap → Cause → Workaround` 4단으로 자동 정리됩니다 — 다음 세션의 Claude가 그대로 읽고 참조 가능한 형태로. 분석기 prompt가 보수적이라 자명한 사실 / 프로젝트 internal trivia / 검증 안 된 추측은 제외됩니다.
+항목마다 증상 → 함정 → 원인 → 우회 방법 순서로 정리돼요. 당연한 사실, 한 프로젝트 안에서만 의미 있는 내용, 확인되지 않은 추측은 기록하지 않아요.
 
-전체 markdown은 IDE에서 그냥 열어보면 됩니다.
-
----
-
-## 비유
-
-| 파일 | 역할 |
-|---|---|
-| **`CLAUDE.md`** | 법률 — 변하지 않는 보편 규칙 (직접 작성) |
-| **`knowledge.md`** | 판례 — "이 상황엔 이렇게 했다" (자동 누적) |
-| **`gotchas.md`** | 사고 보고서 — "같은 실수 반복 금지" (자동 누적) |
-
-법률은 사람이 쓰지만, 판례와 사고 보고서는 매일 쌓이는 거니까 — 그건 자동화될 수 있습니다.
-
-```
-   ┌──────────────────────────────────────────┐
-   │  ~/.claude/CLAUDE.md  (법률 — 사람이 작성)│
-   │                                          │
-   │    @~/.claude/knowledge.md  ─────────────┼──┐
-   │    @~/.claude/gotchas.md    ─────────────┼──┤
-   └──────────────────────────────────────────┘  │
-                    ▲                            │
-                    │ Claude가 매 대화 시작 시   │ 자동 로드
-                    │ 자동으로 위 파일들을 읽음  │
-                    │                            │
-                    │   ┌────────────────────────┘
-                    │   ▼
-              ┌─────┴───────────────────┐
-              │  knowledge.md  (판례)   │ ← claude-distill이
-              │  gotchas.md    (사고)   │   대화 끝마다 자동 추가
-              └─────────────────────────┘
-```
-
-`claude-distill init` 한 번이 위 그림의 **`@reference` 두 줄**을 `CLAUDE.md`에 자동 등록 → 그 후 매 대화 끝마다 distill이 노트에 자동 추가 → 다음 대화가 시작될 때 Claude가 자동으로 읽음.
-
----
-
-## 설치
+## 써 보기
 
 ```bash
 npm install -g claude-distill
 claude-distill init
 ```
 
-분석을 위한 LLM 호출 경로 둘 중 하나가 필요합니다:
+`init`은 두 가지를 등록해요. 여러 번 실행해도 결과는 같아요.
 
-### 옵션 A — Claude Code CLI 사용자 (사전 설치 필요)
+1. 대화가 끝날 때마다 분석을 부르는 Claude Code 설정(`~/.claude/settings.json`의 Stop hook)
+2. 다음 대화부터 노트를 읽게 하는 참조 두 줄(`~/.claude/CLAUDE.md` 끝)
 
-```bash
-npm install -g @anthropic-ai/claude-code
-# 끝. distill이 자동으로 `claude --print` 호출.
+분석에 쓸 Claude 호출 방법이 하나 필요해요.
+
+| 이런 분이라면 | 할 일 |
+| --- | --- |
+| 터미널에서 Claude Code를 써요 | 추가로 할 일 없어요. `claude` 명령을 그대로 써요 |
+| Cursor · VS Code 확장으로 Claude Code를 써요 | `ANTHROPIC_API_KEY` 환경변수를 설정해요. 확장 안의 Claude는 외부에서 부를 수 없어서예요 |
+
+결과는 `~/.claude/knowledge.md`와 `~/.claude/gotchas.md`를 열어서 보면 돼요. 따로 화면은 없어요.
+
+## 비용이 거의 들지 않는 이유
+
+대부분의 대화에는 기록할 교훈이 없다고 보고, 분석 전에 네 번 걸러요.
+
+1. 다른 분석이 만든 대화면 바로 끝내요(무한 반복 방지).
+2. 이미 분석한 구간이면 끝내요.
+3. 짧거나, 도구를 쓰지 않았거나, 오류 흔적이 없는 대화면 끝내요(무료).
+4. API 키가 있으면 Haiku에게 "기록할 게 있나?"만 한 단어로 물어요(사실상 0원).
+
+이 네 번을 통과한 대화만 실제로 분석해요. 통과한 경우 Sonnet 기준 대화당 약 $0.10이에요.
+
+## 개인정보와 보안
+
+- **중간 서버가 없어요.** 내 컴퓨터에서 Anthropic API로 바로 가요. 이 도구의 제작자에게도 대화 내용이 가지 않아요.
+- **API 키를 파일에 저장하지 않아요.** 환경변수로 넣은 값만 읽어요.
+- **코드와 저장소는 건드리지 않아요.** 대화 기록은 읽기만 하고, 노트 파일 두 개에만 내용을 더해요.
+- **분석 기록에는 내용이 아니라 짧은 지문만 남아요.** 같은 구간을 두 번 분석하지 않으려고 12자짜리 해시만 저장해요.
+- 대화에 비밀번호나 키를 직접 적은 적이 있다면, 그 내용도 분석 요청에 포함될 수 있어요. 그런 대화는 분석 전에 `~/.claude/projects/` 안의 해당 기록 파일을 지우세요.
+
+## 지금 되는 것과 아직 안 되는 것
+
+| 상태 | 내용 |
+| --- | --- |
+| **지금 (v0.4.1)** | 자동 기록, 4단 필터, 한국어·영어 자동 감지, Claude Code CLI와 API 두 가지 호출 방법 |
+| 준비 중 | 프로젝트별 노트(지금은 모든 프로젝트가 같은 노트를 써요. 코드 일부는 준비돼 있지만 아직 옵션으로 열지 않았어요) |
+| 준비 중 | [bumpist-code](https://github.com/parksubeom/bumpist-code)로 보내는 규칙 제안 내보내기. 여러 프로젝트에서 반복된 함정을 룰북의 새 규칙 후보로 만들어요 |
+| 계획 없음 | OpenAI나 로컬 모델 지원 |
+
+## 이런 경우엔 맞지 않아요
+
+- **회사 정책상 대화 내용을 외부 API로 보낼 수 없다면** 쓸 수 없어요. 분석에 Anthropic API를 써요.
+- **노트에 자동으로 무언가 쌓이는 게 싫다면** 맞지 않아요. 확신도가 높은 항목만 남기지만, 사람이 검토하기 전에 기록돼요.
+
+<details>
+<summary><b>명령과 설정</b></summary>
+
+| 명령 | 용도 |
+| --- | --- |
+| `claude-distill init` | 설치 후 한 번. Stop hook과 노트 참조를 등록해요 |
+| `claude-distill where` | 파일 위치와 존재 여부 확인 |
+| `claude-distill analyze` | 직접 분석. 보통은 자동으로 돌아서 쓸 일이 없어요 |
+
+`analyze` 옵션: `--no-auto`(노트에 쓰지 않고 결과만 출력), `--mock`(가짜 항목 하나로 동작 확인), `--session=<파일>`, `--quiet`, `--lang=ko|en`, `--no-gate`·`--force`(필터를 건너뛰고 강제 분석)
+
+| 환경변수 | 용도 |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | API로 분석. 설정하면 Haiku 필터도 켜져요 |
+| `CLAUDE_DISTILL_MODEL` | 분석 모델 (기본 `claude-sonnet-4-6`) |
+| `CLAUDE_DISTILL_GATE_MODEL` | 필터 모델 (기본 `claude-haiku-4-5-20251001`) |
+| `CLAUDE_DISTILL_LANG` | 기록 언어 고정 (`ko` 또는 `en`). 없으면 대화의 한글 비율로 정해요 |
+
+기록되는 항목 종류는 11가지예요. 판례는 `trade_off_decision` `environment_quirk` `scale_transition` `tooling_insight` `performance_insight`, 사고 기록은 `api_quirk` `type_shape` `concurrency_race` `build_deploy` `privacy_security` `ux_regression`이에요.
+
+</details>
+
+<details>
+<summary><b>멈추거나 지우려면</b></summary>
+
+- **잠시 멈추기:** `~/.claude/settings.json`의 `hooks.Stop`에서 claude-distill 항목만 빼요.
+- **완전히 지우기:** `npm uninstall -g claude-distill` 후 `~/.claude/CLAUDE.md` 끝의 `<!-- claude-distill auto-references -->` 블록을 지워요. 노트 두 개는 남기고 싶으면 그대로 두세요.
+- **잘못 쌓인 항목:** 노트 파일에서 그 항목의 `###` 블록을 지우면 다음 대화부터 읽지 않아요.
+
+</details>
+
+## Bumpist Suite 안에서
+
+다섯 저장소는 서로의 코드를 가져다 쓰지 않고, 정해진 형식의 파일만 주고받아요. 그래서 하나만 골라 써도 되고, 모두 연결해 쓸 수도 있어요. 색칠된 칸이 이 저장소예요.
+
+| 저장소 | 한 줄 설명 |
+| --- | --- |
+| [bumpist-design](https://github.com/parksubeom/bumpist-design) | 서비스마다 색만 바꾸면 되는 디자인 시스템 |
+| [bumpist-agents](https://github.com/parksubeom/bumpist-agents) | 아이디어에서 미리보기 링크까지 가는 Claude Code 작업 순서 |
+| [bumpist-code](https://github.com/parksubeom/bumpist-code) | AI가 매번 같은 방식으로 코드를 쓰게 하는 룰북 |
+| [bumpist-ship](https://github.com/parksubeom/bumpist-ship) | 파일 하나로 붙이는 자동 검사·배포 |
+| [claude-distill](https://github.com/parksubeom/claude-distill) | Claude가 대화에서 배운 것을 자동으로 기록 |
+
+```mermaid
+flowchart LR
+  design["bumpist-design<br/>디자인 시스템"]
+  code["bumpist-code<br/>룰북"]
+  agents["bumpist-agents<br/>제작 파이프라인"]
+  ship["bumpist-ship<br/>검사·배포"]
+  distill["claude-distill<br/>학습 기록"]
+  service(["내 서비스"])
+  design -- "테마·부품 목록" --> agents
+  code -- "규칙 목록" --> agents
+  agents -- "작업 기록" --> service
+  ship -- "검사·배포" --> service
+  ship -- "품질 보고서" --> agents
+  distill -- "규칙 제안" --> code
+  classDef here fill:#6366F1,stroke:#4338CA,color:#ffffff
+  class distill here
 ```
 
-### 옵션 B — Claude Code IDE 익스텐션 사용자 (Cursor / VS Code)
+claude-distill은 제품군과 따로 써도 완전히 동작해요. 연결하면, 대화에서 반복된 함정이 룰북의 새 규칙 후보가 되는 고리가 생겨요.
 
-빌트인 Claude는 PATH에 노출되지 않으니 **API key**를 사용:
-
-```bash
-# https://console.anthropic.com/ 에서 API key 발급 후
-echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
-source ~/.zshrc
-# distill이 환경변수 감지 시 자동으로 API 호출.
-```
-
-(또는 옵션 A처럼 CLI 추가 설치도 가능 — IDE와 별개 동작.)
-
----
-
-`init`이 idempotent하게 두 가지를 등록:
-
-1. `~/.claude/settings.json` 의 **Stop hook** — 세션마다 자동 분석 호출
-2. `~/.claude/CLAUDE.md` 끝의 **`@knowledge.md` / `@gotchas.md` 참조** — 다음 세션부터 Claude가 자동 참조
-
-끝입니다. 더 이상 손 안 댑니다.
-
----
-
-## 어떻게 동작 (내부 파이프라인 — 개발자용)
-
-> 비개발자라면 위의 플로우차트만 보셔도 충분합니다. 아래는 내부를 검수하고 싶은 분을 위한 상세 단계.
-
-```
-세션 끝
-  └─ Stop hook이 `claude-distill analyze --quiet` 자동 실행
-     ├─ [재귀 가드] 자식 claude 세션이면 즉시 종료 (CLAUDE_DISTILL_CHILD)
-     ├─ [중복 방지] 같은 슬라이스 이미 분석됐으면 종료
-     ├─ [게이트 1 — 휴리스틱] 짧은 세션 / 도구 사용 0 / 에러 키워드 0 → 종료
-     ├─ [게이트 2 — Haiku] (API key 있을 때) yes/no 1토큰 응답, no면 종료
-     ├─ 마지막 user marker 이후 turn slice (보통 ~120 turns / ~85K chars)
-     ├─ Sonnet/Opus로 analyzer prompt 전달, JSON 응답 파싱
-     ├─ confidence:high entry → ~/.claude/knowledge.md / gotchas.md 즉시 append
-     └─ medium / low → drop (사용자 손 안 가게)
-
-다음 세션 시작
-  └─ CLAUDE.md의 @reference로 누적된 markdown이 system prompt에 inject
-     └─ Claude가 자연스럽게 참조 — 같은 함정 안 빠짐
-```
-
-게이트 두 단계는 "대부분의 세션은 인사이트가 없다" 가정으로 본 추출 호출을 ~10× 줄입니다. 게이트가 차단된 세션은 dedup에 마킹돼 같은 슬라이스로 다시 호출돼도 즉시 종료.
-
----
-
-## 카테고리
-
-분석기가 entry마다 다음 11개 중 하나로 분류합니다:
-
-**판례 (knowledge)**
-`trade_off_decision` · `environment_quirk` · `scale_transition` · `tooling_insight` · `performance_insight`
-
-**사고 (gotcha)**
-`api_quirk` · `type_shape` · `concurrency_race` · `build_deploy` · `privacy_security` · `ux_regression`
-
----
-
-## 결과 보기
-
-별도 UI 없습니다. 두 markdown 파일을 그냥 IDE에서 열어보세요:
-
-```bash
-~/.claude/knowledge.md
-~/.claude/gotchas.md
-```
-
-마음에 안 드는 entry는 그 줄을 그냥 삭제하면 됩니다 (markdown이라 자유 편집). 다음 세션부터 그 entry는 더 이상 inject되지 않음.
-
----
-
-## CLI 명령 (3개)
-
-| 명령 | 용도 | 빈도 |
-|---|---|---|
-| `claude-distill init` | hook + CLAUDE.md reference 등록 | **한 번** |
-| `claude-distill where` | path / 존재 여부 확인 (디버깅) | 가끔 |
-| `claude-distill analyze` | 수동 분석 | **거의 안 씀** (hook이 자동) |
-
-`analyze`의 옵션 (잘 안 쓸 것):
-- `--no-auto` — 자동 누적 대신 stdout에 JSON 출력
-- `--mock` — claude CLI 호출 없이 가짜 entry 1건 (파이프라인 검증용)
-- `--session=<file>` — 특정 jsonl 직접 지정
-- `--quiet` — 출력 억제 (hook이 사용)
-- `--no-gate` / `--force` — 휴리스틱/Haiku 게이트와 재귀 가드 모두 우회 (강제 분석)
-
-환경변수:
-- `ANTHROPIC_API_KEY` — 설정 시 Haiku 게이트 자동 활성 (~$0 가까이 게이트 비용)
-- `CLAUDE_DISTILL_GATE_MODEL` — 게이트 모델 (기본 `claude-haiku-4-5-20251001`)
-- `CLAUDE_DISTILL_MODEL` — 본 추출 모델 (기본 `claude-sonnet-4-6`)
-- `CLAUDE_DISTILL_LANG` — 누적 언어 강제 (`ko` / `en`). 미설정 시 transcript 한글 비율로 자동 감지
-- `CLAUDE_DISTILL_CHILD` — distill이 spawn한 자식 claude 표식. 수동 설정 불필요 (hook 무한 재귀 차단용 내부 플래그)
-
----
-
-## 언어 (i18n) — 한국어 / 영어
-
-`knowledge.md` / `gotchas.md`는 한국어 또는 영어로 누적할 수 있습니다. 헤더 / 필드 라벨 (`상황` / `함정` / `근거` … vs `Context` / `Trap` / `Basis` …) 과 entry 본문이 모두 해당 언어로 작성됩니다. 카테고리 키 (`api_quirk`, `trade_off_decision` 등) 는 머신 식별자라 영어 enum 그대로 유지.
-
-**우선순위**:
-1. `claude-distill analyze --lang=ko|en` (명시)
-2. `CLAUDE_DISTILL_LANG=ko|en` 환경변수
-3. **transcript 자동 감지** — 세션 turn에서 한글 음절 비율이 5% 넘으면 `ko`, 아니면 `en`
-4. `process.env.LANG` (예: `ko_KR.UTF-8` → `ko`)
-5. fallback: `en`
-
-대부분의 사용자는 **3번 자동 감지로 충분** — 한국어로 코딩하는 세션은 한국어로, 영어 세션은 영어로 자연스럽게 누적됩니다. 별도 설정 없이.
-
-영어 위주로 쓰다 한국어 entry가 섞이는 게 싫다면 `~/.zshrc`에 `export CLAUDE_DISTILL_LANG=en` 으로 고정.
-
-> **혼재 주의**: 기존 markdown이 영어로 쌓여있을 때 locale을 `ko`로 바꾸면, 같은 파일에 영/한 entry가 섞입니다. plain markdown이라 사용자가 직접 정리 가능 (헤더 / 라벨 일괄 치환). v0.4 첫 cut은 단일 파일 정책 — 언어별 파일 분리 (`knowledge.ko.md`)는 추후 검토.
-
----
-
-## 프라이버시 / 보안
-
-**별도 서버 없음.** distill은 본인 머신 → Anthropic API 직통입니다. 중간에 어떤 third-party 서버도 없음 — 코드도 50KB 미만, [GitHub](https://github.com/parksubeom/claude-distill)에서 그대로 검수 가능.
-
-- **transcript 전송 범위**: 본인의 `ANTHROPIC_API_KEY`로 본인 계정의 Claude API에만 전달. distill 운영자(저)에게도 안 감.
-- **API key 저장**: distill은 key를 절대 파일에 안 씀. 본인이 `~/.zshrc` 등에 export한 환경변수만 읽음.
-- **권한 범위**: transcript는 read-only, 결과 markdown 2개만 append. 코드/repo는 절대 안 건드림.
-- **잔존물**: `~/.claude/.distill/analyzed.json`에는 transcript 내용이 아니라 SHA hash 12자만 저장 (중복 분석 방지용).
-- **결과는 plain markdown**: 마음에 안 드는 entry는 줄 째로 삭제. 다음 세션부터 inject 안 됨.
-- **완전 비활성화**: `~/.claude/settings.json`의 `hooks.Stop` 항목 삭제 또는 `npm uninstall -g claude-distill`.
-
-**시크릿 우려**: transcript에 API key / 패스워드를 평문으로 입력한 적 있다면 분석 prompt에도 그게 들어갑니다. Anthropic API의 데이터 처리 정책 그대로 따르며, distill 자체는 그걸 디스크에 저장하지 않음. 민감한 transcript가 있는 세션은 `claude-distill analyze` 실행 전 `~/.claude/projects/<project>/`에서 해당 jsonl을 직접 삭제하면 됩니다.
-
----
-
-## FAQ
-
-**Q. CLAUDE.md를 직접 작성하면 안 되나?**
-A. 직접 작성 가능. `claude-distill`은 매일 쌓이는 자잘한 판례/사고를 자동으로 잡아내는 보조 도구. CLAUDE.md는 변하지 않는 보편 규칙용으로 그대로 쓰시면 됩니다.
-
-**Q. 토큰 비용은?**
-A. 게이트가 본 추출의 90% 가량을 사전에 컷합니다 (v0.3+). 통과한 세션만 prompt ~85K chars (~20K tokens) input + 응답 ~2K tokens output → Sonnet 기준 세션당 약 $0.10. 그 외 세션은 휴리스틱(무료) / Haiku 게이트(1토큰 응답, 사실상 0원)에서 종료. `ANTHROPIC_API_KEY` 설정 시 Haiku 게이트가 켜져 비용 효율이 가장 좋음.
-
-**Q. 게이트 때문에 인사이트를 놓치는 거 아닌가?**
-A. 휴리스틱이 보수적이라 false negative 가능 (예: 도구 사용 0인 토론 세션). 그런 세션은 `claude-distill analyze --no-gate`로 강제 분석 가능. 게이트가 차단하는 패턴이 본인 워크플로와 안 맞으면 README의 [issue tracker](https://github.com/parksubeom/claude-distill/issues)에 알려주세요.
-
-**Q. confidence:medium / low는 왜 drop?**
-A. 노이즈 누적이 가장 큰 실패 패턴이라 보수적으로 시작. 향후 `--keep-medium` 옵션 추가 가능.
-
-**Q. 프로젝트별 누적은?**
-A. 전역이 기본. 프로젝트별 원하면 `<project>/.claude/CLAUDE.md`에 직접 `@.claude/knowledge.md` 추가. v0.3+에서 `--scope=project` 옵션 자동화 예정.
-
-**Q. Cursor / VS Code Claude Code 익스텐션 사용자도 됨?**
-A. **됩니다.** transcript는 익스텐션도 같은 위치(`~/.claude/projects/`)에 저장. 분석을 위한 LLM 호출만 별도 경로가 필요한데, `ANTHROPIC_API_KEY`만 환경변수로 export하면 distill이 자동으로 Anthropic API 직접 호출 (Node 18+ 빌트인 fetch).
-
-**Q. 다른 LLM 백엔드?**
-A. 현재 `claude` CLI + Anthropic API 두 가지. `--backend=cli|api|auto` 옵션. 기본 `auto`는 `ANTHROPIC_API_KEY` 있으면 API 우선, 없으면 CLI fallback. OpenAI / 로컬 LLM 지원은 v0.3+.
-
-**Q. 잠시 멈추거나 완전히 제거하려면?**
-A. 일시 정지: `~/.claude/settings.json`의 `hooks.Stop` 배열에서 distill entry만 빼면 됨. 완전 제거: `npm uninstall -g claude-distill` 후 `~/.claude/CLAUDE.md` 끝의 `<!-- claude-distill auto-references -->` 블록 삭제. 누적된 `knowledge.md` / `gotchas.md`는 유지하고 싶으면 그대로 두거나, 완전 초기화하려면 삭제.
-
-**Q. 잘못 누적된 entry는 어떻게 지워?**
-A. `~/.claude/knowledge.md` 또는 `gotchas.md`에서 그 entry의 `### ...` 블록만 텍스트로 삭제. 다음 세션부터 inject 안 됨. plain markdown이라 자유 편집.
-
-**Q. 회사 코드 / 시크릿이 transcript에 있어도 괜찮나?**
-A. 분석은 본인의 Anthropic 계정으로만 흘러가지만 (별도 서버 없음 — 위 보안 섹션 참조), API 호출 자체가 회사 정책에 막혀있다면 distill도 못 씀. 의심되는 세션은 `~/.claude/projects/<project>/<session>.jsonl`을 직접 삭제하거나, 해당 세션은 `claude-distill analyze`가 실행되기 전에 hook을 잠시 끄면 됨.
-
-**Q. 어떤 OS에서 됨?**
-A. macOS / Linux / Windows (Node 18+ 설치돼있으면). 경로는 전부 `os.homedir()`로 동적 결정 — 하드코딩 없음. 테스트는 macOS 위주지만 OS-specific 코드는 없음.
-
----
-
-## 상태
-
-v0.4 — i18n. `knowledge.md` / `gotchas.md`를 한국어 / 영어로 자동 누적 (transcript 언어 감지 또는 `CLAUDE_DISTILL_LANG`).
-v0.3 — 게이트 도입 (휴리스틱 + Haiku) + Stop 훅 무한 재귀 가드. 본 추출 호출 ~10× 감소.
-v0.2 — 자동 누적 모델로 재정비.
-
-## License
+## 라이선스
 
 MIT © parksubeom
