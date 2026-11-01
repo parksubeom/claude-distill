@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" width="1200" height="280" role="img" aria-labelledby="title desc">
+  <title id="title">claude-distill</title>
+  <desc id="desc">Claude가 배운 것을 자동으로 기록</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4338CA"/>
+      <stop offset="1" stop-color="#4F46E5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="280" rx="24" fill="url(#bg)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2">
+    <circle cx="1040" cy="140" r="90"/>
+    <circle cx="1040" cy="140" r="130"/>
+  </g>
+  <g fill="#FFFFFF" font-family="Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif">
+    <text x="72" y="128" font-size="64" font-weight="800">claude-distill</text>
+    <text x="72" y="190" font-size="30" font-weight="500">Claude가 배운 것을 자동으로 기록</text>
+  </g>
+</svg>
